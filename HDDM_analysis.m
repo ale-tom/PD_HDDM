@@ -8,20 +8,19 @@ Colorcode = [0.466666668653488 0.674509823322296 0.18823529779911;...
              0 0.447058826684952 0.74117648601532;...
              0.82745099067688 0.0470588244497776 0.0470588244497776];
 
+cols = [0 0.8 0;0 0 0.8; 0.8 0 0];
+
 %% prepare the data    
 % load raw anonymised behaviuoral data    
-load('BehavPD.mat');
+load('BehavPD.mat');%#ok
 % remove outliers and bad trials
 [nRT,nFP,~,~]=RTP(BMatFP,BMatRT);% #ok
-% remove subjects tested with wrong settings
-
+% remove subject tested with wrong settings
 nRT(:,10,:,1)=nan;
 nFP(:,10,:,1)=nan;%#ok
 
-cols = [0 0.8 0;0 0 0.8; 0.8 0 0];
 
 %% extract data
-
 filename='stats_Model1.txt';
 fid = fopen(filename,'rt');
 tmp = textscan(fid,'%s %f %f %d %d %d %d  %d %d', 'Headerlines',1);
@@ -30,12 +29,12 @@ groups = {'Control','PD-Off','PD-On'};
 conds = {'SL','SH','LL','LH'};
 params = {'a_subj','t_subj','v_subj','t_subj'};
 
-for parid = 1%:length(params)    
+for parid = 1   
     paridx = (~cellfun(@isempty,strfind(tmp{1},params{parid})));
-for gid = 1:3;
+for gid = 1:3
     groupidx = paridx & (~cellfun(@isempty,strfind(tmp{1},groups{gid})));
    tmp2 =[]; 
-   for cid = 1:4; 
+   for cid = 1:4 
     
        condidx = groupidx & (~cellfun(@isempty,strfind(tmp{1},conds{cid})));
        tmp2(:,cid,1) = tmp{2}(condidx);  %#ok
@@ -47,8 +46,9 @@ for gid = 1:3;
    
 end
 end
+
 %%
-for i = 1:3;
+for i = 1:3
     
     RT = squeeze(nanmean(nRT(:,:,:,i),1));
     RT(isnan(RT(:,1)),:)=[];
@@ -58,8 +58,6 @@ for i = 1:3;
     [rho,pval]=corr(RT(:),Par(:),'Type','Spearman');
     
     subplot(3,1,i);scatter(RT(:),Par(:),20,'MarkerEdgeColor',cols(i,:),'MarkerFaceColor',cols(i,:));
-    %pf = polyfit(RT(:),Par(:),1);f1 = polyval(pf,linspace(min(RT(:)),max(RT(:)),100));
-    %hold on;plot(linspace(min(RT(:)),max(RT(:)),100),f1,'-r','LineWidth',2);
     axis square; box on
     xy=get(gca,'XLim');
     hold on; line(xy,xy,'LineWidth',2,'Color','k','LineStyle','--')
@@ -73,13 +71,11 @@ end
 
 
 
-%% Analyse slopes
-
-
+%% Analyse slopes with linear regression
 mod_slopes = []; mod_int =[];
-for gid = 1:3;
+for gid = 1:3
     tmp_data = meanv(gid).group;
-    for subi = 1:size(tmp_data,1);
+    for subi = 1:size(tmp_data,1)
    
     pf = polyfit(1:4,tmp_data(subi,:),1);
     mod_slopes(subi,gid)=pf(1);%#ok
@@ -92,7 +88,7 @@ end
 mod_slopes(end,1)=nan;mod_int(end,1)=nan;
 
 
-
+%% plot slope and intercept
 subplot(2,1,1)
 smallbar(nanmean(mod_slopes(:,[1 3 2])),nanstd(mod_slopes(:,[1 3 2]))./sqrt(16),Colorcode([1 3 2],:))
 set(gca,'YTickLabel',[],'XTickLabel',{'Ctr','PDon','PDoff'},'XTick',[],'LineWidth',2);hold on;box off;axis square;

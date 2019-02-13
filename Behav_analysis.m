@@ -11,7 +11,7 @@ rng default; % For reproducibility
 % Poisson Rgression as in Banca et al 2014.
 % Within group rep-ANOVA shows differences in slope and intercepts between
 % on and off patients. Strikingly similar to Tomassini et al 2016.
-% Note: subjects 8 & 10 removed because of technical
+% Note: subject 10 removed because of technical
 % problems (i.e. tested with wrong parameters)
 
 
@@ -24,13 +24,13 @@ Colorcode = [0.466666668653488 0.674509823322296 0.18823529779911;...
 try         
 
 %% prepare the data    
-% load raw anonymised behaviuoral data    
-load('BehavPD.mat');
+% load raw anonymised behavioral data    
+load('BehavPD.mat');%#ok
 % remove outliers and bad trials
-[nRT,nFP,~,~]=RTP(BMatFP,BMatRT);% #ok
+[nRT,nFP,~,~]=RTP(BMatFP,BMatRT);%#ok
 % remove ctrl subject tested with wrong settings
 nRT(:,10,:,1)=nan; %remove RTs
-nFP(:,10,:,1)=nan; %remove foreperiods
+nFP(:,10,:,1)=nan; %#ok%remove foreperiods
 
 %% regression
 lgRT = log(nRT);%log-transform reaction times
@@ -38,8 +38,8 @@ X = bsxfun(@times,ones(size(lgRT,1),1),1:4); X = X(:);%create vector of uncertai
 Xs = sort(repmat(X,[size(lgRT,2),1]));%same as above but collapsed across subjects
 
 
-for i = 1:3; %groups
-    for s = 1:size(nRT,2);%subjects
+for i = 1:3 %groups
+    for s = 1:size(nRT,2)%subjects
         tmp = nRT(:,s,:,i);
         b = glmfit(X,tmp(:),'poisson');
         
@@ -55,14 +55,15 @@ for i = 1:3; %groups
     yfit = glmval(b,Xs,'log');
     plot(Xs,yfit,'LineWidth',5,'Color',Colorcode(i,:));
     hold on;
-    meanRT = squeeze(permute((nanmean(nanmean(nRT(:,:,:,i),1),2)),[1,3,2,4]));%mean
-    err=squeeze(permute(nanstd(nanmean(nRT(:,:,:,i),1),0,2),[1,3,2,4]))./sqrt(15);%SEM
+    meanRT = squeeze(permute((nanmean(nanmean(nRT(:,:,:,i),2),1)),[1,3,2,4]));%mean
+    
+    err=squeeze(permute(nanstd(nanmean(nRT(:,:,:,i),1),0,2),[1,3,2,4]))./sqrt(15+(i~=1));%SEM
   
     errorbar((1:4)',meanRT,err,'o','MarkerFaceColor','white','LineWidth',2,'MarkerSize',8,'Color',Colorcode(i,:))
 end
 set(gca,'FontSize',10);
-set(gca,'YLim',[320,430],'YTickLabel',[],'XTickLabel',[],'XTick',(1:4),'LineWidth',2);hold on;box off;axis square;
-set(gcf,'Color','white'); xlabel('uncertainty');ylabel('log(rt)'); set(gca,'FontSize',10);
+set(gca,'XLim',[0.5,4],'YTickLabel',[],'XTickLabel',[],'XTick',(1:4),'LineWidth',2);hold on;box off;axis square;
+set(gcf,'Color','white'); xlabel('uncertainty');ylabel('RT'); set(gca,'FontSize',10);
 ...
 snapnow
 
@@ -88,60 +89,81 @@ snapnow
 
  
 %% Analyse foreperiod effects
-%binnerise RT according to foreperiods
-n = 7;%n-bins
-mu = round(nanmean(reshape(round(nanmean(squeeze(nanmean(nanmean(nFP),2)),2)),2,2)));
-sigma = round(nanmean(reshape(round(nanmean(squeeze(nanmean(nanstd(nFP),2)),2)),2,2),2));
-
-minFP = round(min(squeeze(min(min(nFP))),[],2));
-maxFP = round(max(squeeze(max(max(nFP))),[],2));
-
-mus = [1 1 2 2]; sigs=[1 2 1 2];
-for e = 1:4
-    edges.ed{e} = round(norminv((0:n)/n, mu(mus(e)), sigma(sigs(e))));
-    edges.ed{e}([1 end])=[minFP(e) maxFP(e)]; 
-    edges.bin{e}=edges.ed{e}(1:end-1)+ round(diff(edges.ed{e})./2);
-end
-
-for group = 1:3
-    for cond = 1:4
-        tmpFP = nFP(:,:,cond,group);
-        
-      %binnerise RTs along the distribution of foreperiods  
-      for bins = 1:n 
-        tmpRT = lgRT(:,:,cond,group);
-        idx = (tmpFP > edges.ed{cond}(bins))& (tmpFP<= edges.ed{cond}(bins+1));
-        tmpFP(idx)= edges.bin{cond}(bins);
-        tmpRT(~idx) = NaN;
-        binMeanlgRT(bins,:,cond,group) = nanmean(tmpRT);%#ok
-      end
-       bFP(:,:,cond,group) = tmpFP;%#ok
-       
-   %Quantify the foreperiod effect as the slope of a Poisson regression
-    for s = 1:14;
-        tmp = binMeanlgRT(:,s,cond,group);
-        b = glmfit(edges.bin{cond},exp(tmp(:)),'poisson');
-        
-        %store intercept & slope for statistical analysis
-        intercFPEff(s,cond,group)=b(1);%#ok
-        slopeFPEff(s,cond,group)=b(2);%#ok
-    end  
+%%
+N = zeros(3,1);avtmp2 =zeros(200,3);minlength = 200;
+for d = 1:3
+    for s = 1:size(BMatRT,2)
+        for c = 1:4
+            
+            tmp = [BMatRT(:,s,c,d) BMatFP(:,s,c,d)];%#ok
+            
+            tmp = sortrows(tmp,2);
+            tmp(tmp(:,1)<0.1,:)=[];
+            tmp(isnan(tmp(:,1)),:)=[];
+            
+            
+            %smooth for plotting purposes
+            tmpplot = smooth(tmp(:,2),(tmp(:,1)),0.1,'rlowess');
+            %statistics on raw data
+            tmp2 = tmp(:,1);
+            lm = fitlm(tmp2,linspace(min(tmp(:,2)),max(tmp(:,2)),length(tmp2)));
+            
+            
+            slope(s,c,d) = lm.Coefficients.Estimate(2);
+            pslope(s,c,d) = lm.Coefficients.pValue(2);%#ok
+            R2(s,c,d) = lm.Rsquared.Ordinary;%#ok
+            if pslope(s,c,d)>0.05; slopeC(s,c,d) = nan;  R2C(s,c,d) = nan;%#ok
+            else
+                slopeC(s,c,d) = slope(s,c,d);%#ok
+                R2C(s,c,d) = lm.Rsquared.Ordinary;%#ok
+                avtmp2(1:length(tmpplot),d) = avtmp2(1:length(tmpplot),d)+zscore(tmpplot); N(d) = N(d)+1;%this is for plotting
+                minlength = min(minlength,length(tmp2));
+            end
+            
+            pF(s,c,d) = lm.coefTest;%#ok
+            
+        end
     end
 end
-slopeFPEff(10,:,1) = nan;
-intercFPEff(10,:,1) = nan;%#ok
+
+
+%% Compare foreperiod effects between groups
+fp_stat = nanmean(slopeC,2);
+%apply Bonferroni correction
+alpha = 0.05/3;
+%2 sample ttest - between
+[h,p_ctr_off,CI,stats]=ttest2(fp_stat(:,1,1),fp_stat(:,1,2),'alpha',alpha);%#ok
+[h,p_ctr_on]=ttest2(fp_stat(:,1,1),fp_stat(:,1,3),'alpha',alpha);%#ok
+%paired ttest - within
+[h,p_of_fon]=ttest(fp_stat(:,1,2),fp_stat(:,1,3),'alpha',alpha);%#ok
+
+% plot foreperiod effects
+figure
+for iplot = 1:3
+    tmpiplot = avtmp2(1:100,iplot)./N(iplot);%mean
+    tmpiplot = tmpiplot-min(tmpiplot);%make all positive
+    tmpiplot = tmpiplot./max(tmpiplot);%normalize with respect to max value for plotting
+plot(tmpiplot,'Color',Colorcode(iplot,:),'LineWidth',3);hold on;
+end
+
+set(gca,'YTickLabel',[0 0.5 1],'XTickLabel',[0 0.5 1],'XTick',[0 50 100],'YTick',[0 0.5 1],'LineWidth',2);hold on;axis square;ylim([-0.05 1.05]);xlim([0 100])
+xlabel('Normalized Foreperiod','FontSize',20,'FontWeight','Bold');ylabel('Normalized RT','FontSize',20,'FontWeight','Bold');axis square
+set(gca,'FontSize', 20); set(gcf,'Color','white')
+
+
+%barplots slopes of foreperiod effects
+c = slopeC(:,:,1);on = slopeC(:,:,3);off = slopeC(:,:,3);
+fp_eff(1,:)=[nanmean(c(:)) nanstd(c(:))/sqrt(sum(~isnan(c(:))))];
+fp_eff(2,:)=[nanmean(off(:)) nanstd(off(:))/sqrt(sum(~isnan(off(:))))];
+fp_eff(3,:)=[nanmean(on(:)) nanstd(on(:))/sqrt(sum(~isnan(on(:))))];
+figure
+smallbar(fp_eff(:,1),fp_eff(:,2),Colorcode([1 2 3],:))
+set(gca,'YTickLabel',[-3 -1.5 0],'XTickLabel',[],'YTick',[-3 -1.5 0],'XTick',[1 2 3],'LineWidth',2);hold on;box off;axis square;
+set(gca,'ylim',[-3 0])
+set(gca,'FontSize', 20); set(gcf,'Color','white')
 
 
 
-%FP-EFFECT statistics
-% within (reapeated): FP present for all conditions and groups (negative
-% slope) Only difference between levels of uncertainty indicating that with
-% higher levels of uncertainty it's hard to keep track of time. IMPORTANTLY:
-% it shows that PD-OFF subjects were actively keeping track of time.
-
-%output for SPSS
-%dlmwrite('slopeFP.txt',slopeFPEff);
-%dlmwrite('intercFP.txt',intercFPEff);
 
 catch ME
     
