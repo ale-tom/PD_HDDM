@@ -123,7 +123,7 @@ DIC(idm) = round(tmp{2}(end-2));%#ok
 
 end
 
-bar(DIC,'Color');
+bar(DIC,'FaceColor',[0.5 0.5 0.5]);
 set(gca,'Ylim',[-24500 -24000 ])
 
 end
